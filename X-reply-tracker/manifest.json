@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "X Reply Target Tracker",
+  "version": "1.0",
+  "description": "Track your reply targets on X.com",
+  "author": "i-bangash",
+  "homepage_url": "https://github.com/i-bangash/x-reply-tracker",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://x.com/*",
+    "https://twitter.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "X Reply Target Tracker"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
