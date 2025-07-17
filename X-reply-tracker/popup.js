@@ -67,33 +67,53 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load data from storage and update UI
     function loadData() {
+        // Check if extension context is still valid
+        if (!chrome.runtime?.id) {
+            console.log('Popup: Extension context invalidated');
+            return;
+        }
+        
         const today = new Date().toDateString();
         
-        chrome.storage.sync.get(['dailyTarget', `replies_${today}`], function(data) {
-            const target = data.dailyTarget || 0;
-            const replies = data[`replies_${today}`] || 0;
-            
-            // Update UI
-            currentRepliesEl.textContent = replies;
-            targetRepliesEl.textContent = target > 0 ? `/ ${target}` : 'No target set';
-            
-            // Update progress bar
-            if (target > 0) {
-                const progress = Math.min((replies / target) * 100, 100);
-                progressFill.style.width = progress + '%';
+        try {
+            chrome.storage.sync.get(['dailyTarget', `replies_${today}`], function(data) {
+                if (chrome.runtime.lastError) {
+                    console.log('Popup: Storage error:', chrome.runtime.lastError);
+                    return;
+                }
                 
-                // Show success message if target is reached
-                if (replies >= target && replies > 0) {
-                    successMessage.textContent = `🎉 Target achieved! You've made ${replies} replies today!`;
-                    successMessage.style.display = 'block';
+                if (!chrome.runtime?.id) {
+                    console.log('Popup: Extension context lost during storage operation');
+                    return;
+                }
+                
+                const target = data.dailyTarget || 0;
+                const replies = data[`replies_${today}`] || 0;
+                
+                // Update UI
+                currentRepliesEl.textContent = replies;
+                targetRepliesEl.textContent = target > 0 ? `/ ${target}` : 'No target set';
+                
+                // Update progress bar
+                if (target > 0) {
+                    const progress = Math.min((replies / target) * 100, 100);
+                    progressFill.style.width = progress + '%';
+                    
+                    // Show success message if target is reached
+                    if (replies >= target && replies > 0) {
+                        successMessage.textContent = `🎉 Target achieved! You've made ${replies} replies today!`;
+                        successMessage.style.display = 'block';
+                    } else {
+                        successMessage.style.display = 'none';
+                    }
                 } else {
+                    progressFill.style.width = '0%';
                     successMessage.style.display = 'none';
                 }
-            } else {
-                progressFill.style.width = '0%';
-                successMessage.style.display = 'none';
-            }
-        });
+            });
+        } catch (error) {
+            console.log('Popup: Error loading data:', error);
+        }
     }
     
     // Listen for updates from content script
@@ -123,6 +143,14 @@ document.addEventListener('DOMContentLoaded', function() {
             stayActiveToggle.classList.remove('active');
         }
     }
+    
+    // Listen for storage changes to sync toggle state
+    chrome.storage.onChanged.addListener(function(changes, namespace) {
+        if (changes.stayActiveEnabled) {
+            stayActiveEnabled = changes.stayActiveEnabled.newValue;
+            updateToggleUI();
+        }
+    });
     
     // Inject overlay into the page
     function injectOverlay() {
@@ -182,23 +210,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     <span id="overlay-target">No target set</span>
                 </div>
             </div>
-            <button style="
-                position: absolute;
-                top: 10px;
-                right: 10px;
-                background: none;
-                border: none;
-                color: #71767b;
-                cursor: pointer;
-                font-size: 18px;
-                padding: 5px;
-                border-radius: 50%;
-                width: 30px;
-                height: 30px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            " onclick="this.parentElement.remove()">×</button>
         `;
         
         // Add to page
@@ -207,29 +218,64 @@ document.addEventListener('DOMContentLoaded', function() {
         // Load and display current data
         loadOverlayData();
         
-        // Update overlay data every 2 seconds
-        setInterval(loadOverlayData, 2000);
+        // Update overlay data every 2 seconds with error handling
+        const updateInterval = setInterval(() => {
+            if (!chrome.runtime?.id) {
+                console.log('Overlay: Extension context invalidated, stopping interval');
+                clearInterval(updateInterval);
+                return;
+            }
+            
+            // Check if overlay still exists
+            if (!document.getElementById('x-reply-tracker-overlay')) {
+                console.log('Overlay: Element removed, stopping interval');
+                clearInterval(updateInterval);
+                return;
+            }
+            
+            loadOverlayData();
+        }, 2000);
         
         function loadOverlayData() {
+            // Check if extension context is still valid
+            if (!chrome.runtime?.id) {
+                console.log('Overlay: Extension context invalidated, stopping updates');
+                return;
+            }
+            
             const today = new Date().toDateString();
             
-            chrome.storage.sync.get(['dailyTarget', `replies_${today}`], function(data) {
-                const target = data.dailyTarget || 0;
-                const replies = data[`replies_${today}`] || 0;
-                
-                // Update progress
-                const currentEl = document.getElementById('overlay-current');
-                const targetEl = document.getElementById('overlay-target');
-                const progressEl = document.getElementById('overlay-progress');
-                
-                if (currentEl) currentEl.textContent = replies;
-                if (targetEl) targetEl.textContent = target > 0 ? `/ ${target}` : 'No target set';
-                
-                if (progressEl && target > 0) {
-                    const progress = Math.min((replies / target) * 100, 100);
-                    progressEl.style.width = progress + '%';
-                }
-            });
+            try {
+                chrome.storage.sync.get(['dailyTarget', `replies_${today}`], function(data) {
+                    if (chrome.runtime.lastError) {
+                        console.log('Overlay: Storage error:', chrome.runtime.lastError);
+                        return;
+                    }
+                    
+                    if (!chrome.runtime?.id) {
+                        console.log('Overlay: Extension context lost during storage operation');
+                        return;
+                    }
+                    
+                    const target = data.dailyTarget || 0;
+                    const replies = data[`replies_${today}`] || 0;
+                    
+                    // Update progress - check if elements still exist
+                    const currentEl = document.getElementById('overlay-current');
+                    const targetEl = document.getElementById('overlay-target');
+                    const progressEl = document.getElementById('overlay-progress');
+                    
+                    if (currentEl) currentEl.textContent = replies;
+                    if (targetEl) targetEl.textContent = target > 0 ? `/ ${target}` : 'No target set';
+                    
+                    if (progressEl && target > 0) {
+                        const progress = Math.min((replies / target) * 100, 100);
+                        progressEl.style.width = progress + '%';
+                    }
+                });
+            } catch (error) {
+                console.log('Overlay: Error loading data:', error);
+            }
         }
     }
     
